@@ -830,11 +830,18 @@ function OrderView({data,setData}){
 }
 
 /* ── RECIPE ── */
-function RecView({data,setData}){
+function RecView({data,setData,initName,onInitDone}){
   const[sel,setSel]=useState(null);
   const[modal,setModal]=useState(false);
   const[form,setForm]=useState({});
   const[pq,setPq]=useState({});
+  useEffect(()=>{
+    if(initName){
+      setForm({name:initName,category:'빵',yield:1,sellPrice:'',ingredients:[]});
+      setModal(true);
+      onInitDone&&onInitDone();
+    }
+  },[initName]);
   const cost=r=>recipeCost(r,data.inventory);
   const saveR=()=>{
     const r={id:form.id||uid(),name:form.name||'',category:form.category||'빵',yield:+form.yield||1,sellPrice:+form.sellPrice||0,ingredients:form.ingredients||[]};
@@ -956,7 +963,7 @@ function RecView({data,setData}){
 }
 
 /* ── SALES ── */
-function SalesView({data,setData}){
+function SalesView({data,setData,onRegisterRecipe}){
   const[stat,setStat]=useState('');
   const[statH,setStatH]=useState('');
   const fileRef=useRef();
@@ -1058,6 +1065,25 @@ function SalesView({data,setData}){
           ))}
         </div>
       </div>
+      {(()=>{
+        const allNames=[...new Set(data.sales.map(s=>s.productName))];
+        const unlinked=allNames.filter(n=>!data.recipes.find(r=>r.name.replace(/\s+/g,' ').trim()===n.replace(/\s+/g,' ').trim()));
+        if(!unlinked.length)return null;
+        return(
+          <div style={{...card,marginBottom:12,borderColor:'#fcd9a8'}}>
+            <p style={{fontWeight:600,fontSize:13,marginBottom:6,color:C.amber}}>⚠ 레시피 미연결 메뉴 — {unlinked.length}개</p>
+            <p style={{fontSize:11,color:C.muted,marginBottom:10}}>연결하면 재고 자동 차감이 돼요. 클릭해서 바로 등록할 수 있어요.</p>
+            <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+              {unlinked.map(name=>(
+                <button key={name} onClick={()=>onRegisterRecipe&&onRegisterRecipe(name)}
+                  style={{fontSize:12,padding:'4px 10px',background:C.amberBg,color:C.amber,borderColor:'#fcd9a8'}}>
+                  + {name}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
       {td?.its?.length>0&&<div style={card}>
         <p style={{fontWeight:600,fontSize:13,marginBottom:8}}>오늘 상품별 판매</p>
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
@@ -1292,12 +1318,13 @@ const TABS=[
 ];
 function App(){
   const[tab,setTab]=useState('dashboard');
+  const[pendingRecipe,setPendingRecipe]=useState(null);
   const[data,setRaw]=useState(EMPTY);
   const[loading,setLoading]=useState(true);
   const[saving,setSaving]=useState(false);
   useEffect(()=>{loadS().then(d=>{if(d)setRaw({...EMPTY,...d});setLoading(false);});},[]);
   const setData=useCallback(async d=>{setRaw(d);setSaving(true);await saveS(d);setSaving(false);},[]);
-  const V={dashboard:<Dashboard data={data}/>,inventory:<InvView data={data} setData={setData}/>,orders:<OrderView data={data} setData={setData}/>,recipe:<RecView data={data} setData={setData}/>,sales:<SalesView data={data} setData={setData}/>,staff:<StaffView data={data} setData={setData}/>,catering:<CatView data={data} setData={setData}/>,pnl:<PnLView data={data} setData={setData}/>};
+  const V={dashboard:<Dashboard data={data}/>,inventory:<InvView data={data} setData={setData}/>,orders:<OrderView data={data} setData={setData}/>,recipe:<RecView data={data} setData={setData} initName={pendingRecipe} onInitDone={()=>setPendingRecipe(null)}/>,sales:<SalesView data={data} setData={setData} onRegisterRecipe={name=>{setPendingRecipe(name);setTab('recipe');}}/>,staff:<StaffView data={data} setData={setData}/>,catering:<CatView data={data} setData={setData}/>,pnl:<PnLView data={data} setData={setData}/>};
   if(loading)return<div style={{minHeight:'100vh',background:C.bg,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:12}}><div style={{fontSize:36}}>☕</div><p style={{color:C.muted,fontSize:14}}>데이터 불러오는 중...</p></div>;
   return(
     <div style={{minHeight:'100vh',background:C.bg}}>
