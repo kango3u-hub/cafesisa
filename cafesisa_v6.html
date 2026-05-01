@@ -368,17 +368,27 @@ const C={bg:'#f5f3ef',surface:'#fff',border:'#e0dbd4',text:'#1a1a1a',muted:'#777
 const card={background:C.surface,borderRadius:10,border:`1px solid ${C.border}`,padding:'1rem 1.25rem'};
 const metric={background:'#ede9e3',borderRadius:8,padding:'1rem'};
 
+const LS_KEY='cafesisa_cache';
 async function loadS(){
+  // 1. 로컬 캐시 먼저 확인
+  try{const c=localStorage.getItem(LS_KEY);if(c){const d=JSON.parse(c);if(d&&typeof d==='object')return d;}}catch(e){}
+  // 2. 캐시 없으면 구글 시트에서 불러옴
   try{
     const r=await fetch(GAS_URL+'?t='+Date.now(),{redirect:'follow',cache:'no-store'});
     const t=await r.text();
     const d=JSON.parse(t);
-    return d&&typeof d==='object'?d:null;
-  }catch(e){console.error('load error',e);return null;}
+    if(d&&typeof d==='object'){
+      try{localStorage.setItem(LS_KEY,JSON.stringify(d));}catch(e){}
+      return d;
+    }
+  }catch(e){console.error('load error',e);}
+  return null;
 }
 async function saveS(d){
+  // 1. 로컬 캐시에 즉시 저장 (탭 이동해도 안 날아감)
+  try{localStorage.setItem(LS_KEY,JSON.stringify(d));}catch(e){}
+  // 2. 구글 시트에 백그라운드 동기화
   try{
-    // no-cors: 로컬 파일에서 외부 POST 시 필요
     await fetch(GAS_URL,{
       method:'POST',
       mode:'no-cors',
