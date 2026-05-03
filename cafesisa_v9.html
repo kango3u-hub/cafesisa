@@ -1449,6 +1449,12 @@ function App(){
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:'12px 16px 0',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',position:'sticky',top:0,zIndex:100}}>
         <span style={{fontWeight:700,fontSize:15,color:C.amber,whiteSpace:'nowrap'}}>카페시사</span>
         {saving?<span style={{fontSize:11,color:C.muted}}>저장 중...</span>:<button onClick={async()=>{setSaving(true);await saveS(data);setSaving(false);alert('구글 시트 동기화 완료!');}} style={{fontSize:11,padding:'3px 8px',background:C.greenBg,color:C.green,borderColor:'#bbf7d0'}}>☁ 동기화</button>}
+        <button onClick={async()=>{
+          try{localStorage.removeItem('cafesisa_cache');}catch(e){}
+          const d=await loadS();
+          if(d){setRaw({...EMPTY,...d});alert('구글 시트에서 새로 불러왔어요!');}
+          else{alert('데이터를 불러오지 못했어요.');}
+        }} style={{fontSize:11,padding:'3px 8px'}}>↓ 새로고침</button>
         <div style={{display:'flex',gap:1,overflowX:'auto',flex:1}}>
           {TABS.map(({id,label})=>(
             <button key={id} onClick={()=>setTab(id)} style={{fontSize:12,padding:'7px 11px',borderRadius:'6px 6px 0 0',whiteSpace:'nowrap',background:tab===id?C.bg:'transparent',color:tab===id?C.text:C.muted,border:tab===id?`1px solid ${C.border}`:'1px solid transparent',borderBottom:tab===id?`1px solid ${C.bg}`:'none',fontWeight:tab===id?600:400}}>{label}</button>
