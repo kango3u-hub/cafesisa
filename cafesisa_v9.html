@@ -385,16 +385,23 @@ async function loadS(){
   return null;
 }
 async function saveS(d){
-  // 1. 로컬 캐시에 즉시 저장 (탭 이동해도 안 날아감)
+  // 1. 로컬 캐시에 즉시 저장
   try{localStorage.setItem(LS_KEY,JSON.stringify(d));}catch(e){}
-  // 2. 구글 시트에 백그라운드 동기화
+  // 2. 구글 시트에 저장 후 응답 확인
   try{
-    await fetch(GAS_URL,{
+    const r=await fetch(GAS_URL,{
       method:'POST',
-      mode:'no-cors',
+      mode:'cors',
+      headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({data:d}),
     });
-  }catch(e){console.error('save error',e);}
+    if(r.ok){
+      try{localStorage.setItem(LS_KEY+'_ts',Date.now().toString());}catch(e){}
+    }
+  }catch(e){
+    // cors 실패 시 no-cors로 폴백
+    try{await fetch(GAS_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({data:d})});}catch(e2){}
+  }
 }
 const calcHours=(s,e)=>{if(!s||!e)return 0;const[sh,sm]=s.split(':').map(Number);const[eh,em]=e.split(':').map(Number);return Math.max(0,(eh*60+em)-(sh*60+sm))/60;};
 const avgCostRecent=(inventoryId,history)=>{
@@ -1450,8 +1457,11 @@ function App(){
         <span style={{fontWeight:700,fontSize:15,color:C.amber,whiteSpace:'nowrap'}}>카페시사</span>
         {saving?<span style={{fontSize:11,color:C.muted}}>저장 중...</span>:<button onClick={async()=>{setSaving(true);await saveS(data);setSaving(false);alert('구글 시트 동기화 완료!');}} style={{fontSize:11,padding:'3px 8px',background:C.greenBg,color:C.green,borderColor:'#bbf7d0'}}>☁ 동기화</button>}
         <button onClick={async()=>{
-          try{localStorage.removeItem('cafesisa_cache');}catch(e){}
+          // 캐시 지우고 구글 시트에서 강제 로드
+          try{localStorage.removeItem(LS_KEY);localStorage.removeItem(LS_KEY+'_ts');}catch(e){}
+          setSaving(true);
           const d=await loadS();
+          setSaving(false);
           if(d){setRaw({...EMPTY,...d});alert('구글 시트에서 새로 불러왔어요!');}
           else{alert('데이터를 불러오지 못했어요.');}
         }} style={{fontSize:11,padding:'3px 8px'}}>↓ 새로고침</button>
