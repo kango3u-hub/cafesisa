@@ -233,6 +233,7 @@ tr:hover td{background:var(--bg2)}
 <!-- 매출업로드 -->
 <div id="tab-up" class="tab">
   <div class="bar"><h2>매출 업로드 (토스포스)</h2></div>
+  <div id="uploaded-dates" style="margin-bottom:10px"></div>
   <div class="dz" id="dz" onclick="document.getElementById('fi').click()">
     <div class="icon">↑</div>
     <p>클릭 또는 파일 드래그</p>
@@ -311,6 +312,7 @@ function showTab(id,btn){
   btn.classList.add('on');
   if(id==='phys')renderPhys();
   if(id==='stat')updStatSel();
+  if(id==='up')renderUploadedDates();
 }
 
 async function gas(p){
@@ -631,6 +633,11 @@ function handleFile(file){
         dm[date][key]=(dm[date][key]||0)+qty;
         allM.add(menu);
       }
+      // 이미 업로드된 날짜 제외
+      const uploadedDates=new Set(S.sales.map(s=>fmtDate(s.date)));
+      const skippedDates=Object.keys(dm).filter(d=>uploadedDates.has(d)).sort();
+      skippedDates.forEach(d=>delete dm[d]);
+
       parsed=[];
       Object.keys(dm).sort().forEach(date=>{
         Object.keys(dm[date]).forEach(k=>{
@@ -638,8 +645,14 @@ function handleFile(file){
           parsed.push({date,menuName:m,option:o||'',count:dm[date][k]});
         });
       });
+      if(!parsed.length&&skippedDates.length){
+        toast('모든 날짜가 이미 업로드됨','warn');
+        document.getElementById('up-res').innerHTML=`<div class="card"><div class="card-h">중복 감지</div><div style="font-size:13px;color:var(--tx2)">파일의 모든 날짜가 이미 업로드돼 있습니다.<br><span style="color:var(--orange)">${skippedDates.join(', ')}</span></div></div>`;
+        return;
+      }
       const rms=new Set(S.recipes.map(r=>r.menuName));
-      showParseRes([...allM].filter(m=>rms.has(m)),[...allM].filter(m=>!rms.has(m)),allM.size,parsed.reduce((s,i)=>s+i.count,0),parsed);
+      const validMenus=new Set(parsed.map(i=>i.menuName));
+      showParseRes([...validMenus].filter(m=>rms.has(m)),[...validMenus].filter(m=>!rms.has(m)),validMenus.size,parsed.reduce((s,i)=>s+i.count,0),parsed,skippedDates);
     }catch(err){toast('파싱 오류: '+err.message,'err');}
   };
   rd.readAsArrayBuffer(file);
@@ -647,20 +660,25 @@ function handleFile(file){
 
 function xlDate(s){return new Date((s-25569)*86400*1000).toISOString().slice(0,10)}
 
-function showParseRes(matched,unmatched,totalKind,totalQty,data){
+function showParseRes(matched,unmatched,totalKind,totalQty,data,skippedDates){
+  skippedDates=skippedDates||[];
   const dates=[...new Set(data.map(i=>i.date))].sort();
   const range=dates.length?`${dates[0]} ~ ${dates[dates.length-1]}`:'-';
   document.getElementById('up-res').innerHTML=`
     <div class="card">
       <div class="card-h">파싱 결과</div>
-      <div style="font-size:13px;margin-bottom:12px">기간: <strong>${range}</strong> &nbsp;|&nbsp; 총 <strong>${totalQty.toLocaleString()}건</strong> (${totalKind}종)</div>
+      <div style="font-size:13px;margin-bottom:12px">업로드 대상: <strong>${range}</strong> &nbsp;|&nbsp; 총 <strong>${totalQty.toLocaleString()}건</strong> (${totalKind}종)</div>
+      ${skippedDates.length?`<div style="margin-bottom:12px;padding:8px 10px;background:var(--orange-bg);border-radius:var(--r)">
+        <div class="lbl" style="color:var(--orange);margin-bottom:4px">중복으로 제외된 날짜 (${skippedDates.length}일)</div>
+        <div style="font-size:12px;color:var(--orange)">${skippedDates.join(' · ')}</div>
+      </div>`:''}
       <div style="margin-bottom:10px">
         <div class="lbl" style="margin-bottom:5px">레시피 매칭 (${matched.length}종) — 재고 차감 대상</div>
         <div>${matched.map(m=>`<span class="tag ok">${esc(m)}</span>`).join('')||'<span style="color:var(--tx3);font-size:12px">없음</span>'}</div>
       </div>
       <div>
-        <div class="lbl" style="margin-bottom:5px">레시피 없음 (${unmatched.length}종) — 차감 불가</div>
-        <div>${unmatched.map(m=>`<span class="tag warn">${esc(m)}</span>`).join('')||'<span style="color:var(--tx3);font-size:12px">없음</span>'}</div>
+        <div class="lbl" style="margin-bottom:5px">레시피 없음 (${unmatched.length}종) — 클릭하여 레시피 등록</div>
+        <div>${unmatched.map(m=>`<span class="tag warn" style="cursor:pointer" onclick="openRecModal('${escQ(m)}')" title="레시피 등록">${esc(m)} +</span>`).join('')||'<span style="color:var(--tx3);font-size:12px">없음</span>'}</div>
       </div>
     </div>
     <div style="display:flex;gap:8px">
@@ -689,6 +707,19 @@ async function execDeduct(btn){
 }
 
 function clearUp(){parsed=null;document.getElementById('up-res').innerHTML='';document.getElementById('fi').value='';}
+
+function renderUploadedDates(){
+  const el=document.getElementById('uploaded-dates');
+  if(!el)return;
+  const dates=[...new Set(S.sales.map(s=>fmtDate(s.date)))].sort();
+  if(!dates.length){el.innerHTML='';return;}
+  const months={};
+  dates.forEach(d=>{const m=d.slice(0,7);if(!months[m])months[m]=[];months[m].push(d.slice(8));});
+  const monthStr=Object.keys(months).sort().map(m=>`<span style="margin-right:14px"><strong>${m}</strong> ${months[m].join(', ')}일</span>`).join('');
+  el.innerHTML=`<div style="background:var(--bg);border:0.5px solid var(--bd);border-radius:var(--r);padding:10px 14px;font-size:12px;color:var(--tx2);line-height:1.9">
+    <div class="lbl" style="margin-bottom:4px">이미 업로드된 날짜</div>${monthStr}
+  </div>`;
+}
 
 // ── Stats ──
 function updStatSel(){
