@@ -324,7 +324,13 @@ async function loadAll(){
   try{
     const d=await gas();
     if(!d.ok)throw new Error(d.error||'오류');
-    S=d;
+    S={
+      inventory:d.inventory||[],
+      recipes:d.recipes||[],
+      trans:d.trans||[],
+      incoming:d.incoming||[],
+      sales:d.sales||[]
+    };
     renderInv();renderRec();updDl();updStatSel();
     setSt('연결됨','ok');
   }catch(e){setSt('연결 실패','err');toast('연결 실패: '+e.message,'err');}
