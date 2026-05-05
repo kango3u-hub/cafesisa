@@ -316,8 +316,8 @@ function showTab(id,btn){
 }
 
 async function gas(p){
-  const opt=p?{method:'POST',body:JSON.stringify(p),redirect:'follow'}:{redirect:'follow'};
-  const r=await fetch(GAS,opt);
+  if(!p){const r=await fetch(GAS,{redirect:'follow'});return r.json();}
+  const r=await fetch(GAS,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(p),redirect:'follow'});
   return r.json();
 }
 
