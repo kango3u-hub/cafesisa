@@ -303,7 +303,7 @@ let S={inventory:[],recipes:[],trans:[],incoming:[],sales:[]};
 let selRec=null,editMaster=null,editRec=null,parsed=null,pChart=null;
 
 // ── Core ──
-const today=()=>new Date().toISOString().slice(0,10);
+const today=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 
 function showTab(id,btn){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
@@ -422,7 +422,10 @@ function addInRow(data){
   d.style.gridTemplateColumns='1fr 80px 72px 100px 30px';
   const unit=data.unit||getUnit(data.ingredient||'')||'g';
   d.innerHTML=`
-    <input list="ing-dl" placeholder="재료명" class="nm" value="${esc(data.ingredient||'')}" oninput="autoUnit(this)">
+    <div style="position:relative">
+      <input placeholder="재료명 입력 또는 선택" class="nm" value="${esc(data.ingredient||'')}" oninput="filterIngDrop(this)" onfocus="showIngDrop(this)" onblur="setTimeout(()=>hideIngDropSimple(this),200)">
+      <div class="ing-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg);border:0.5px solid var(--bd2);border-radius:var(--r);max-height:160px;overflow-y:auto;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.12)"></div>
+    </div>
     <input type="number" placeholder="수량" class="qty" value="${data.qty||''}" step="0.01" min="0">
     <select class="un">${unitOpts(unit)}</select>
     <input type="number" placeholder="단가(원)" class="price" value="${data.price||''}" step="1" min="0">
@@ -452,7 +455,10 @@ function addProdRow(){
   d.className='add-row';
   d.style.gridTemplateColumns='1fr 80px 72px 1fr 30px';
   d.innerHTML=`
-    <input list="ing-dl" placeholder="재료명" class="nm" oninput="autoUnit(this)">
+    <div style="position:relative">
+      <input placeholder="재료명 입력 또는 선택" class="nm" oninput="filterIngDrop(this)" onfocus="showIngDrop(this)" onblur="setTimeout(()=>hideIngDropSimple(this),200)">
+      <div class="ing-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg);border:0.5px solid var(--bd2);border-radius:var(--r);max-height:160px;overflow-y:auto;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.12)"></div>
+    </div>
     <input type="number" placeholder="사용량" class="qty" step="0.01" min="0">
     <select class="un">${unitOpts('g')}</select>
     <input placeholder="비고 (예: 소금빵 50개 생산)" class="note">
@@ -565,13 +571,85 @@ function addRecRow(ing){
   const d=document.createElement('div');
   d.className='ing-row';
   d.style.gridTemplateColumns='1fr 72px 62px 105px 30px';
+  const matched=S.inventory.find(i=>i.name===(ing.ingredient||''));
+  const borderStyle=ing.ingredient?(matched?'border-color:var(--green)':'border-color:var(--orange)'):'';
   d.innerHTML=`
-    <input list="ing-dl" placeholder="재료명" value="${esc(ing.ingredient||'')}" class="rn" oninput="autoUnit(this,'ru')">
+    <div style="position:relative">
+      <input placeholder="재료명 입력 또는 ▼ 선택" value="${esc(ing.ingredient||'')}" class="rn" style="${borderStyle}" oninput="filterIngDrop(this)" onfocus="showIngDrop(this)" onblur="setTimeout(()=>hideIngDrop(this),200)">
+      <div class="ing-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg);border:0.5px solid var(--bd2);border-radius:var(--r);max-height:160px;overflow-y:auto;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.12)"></div>
+    </div>
     <input type="number" placeholder="사용량" value="${ing.amount||''}" class="ra" step="0.01">
     <select class="ru">${unitOpts(ing.unit||'g')}</select>
     <input placeholder="옵션키워드" value="${esc(ing.optionKeyword||'')}" class="ro">
     <button class="del-b" onclick="this.parentElement.remove()">×</button>`;
   document.getElementById('rm-rows').appendChild(d);
+}
+
+function showIngDrop(inp){
+  const drop=inp.nextElementSibling;
+  renderIngDrop(inp,drop,'');
+  drop.style.display='block';
+}
+
+function hideIngDrop(inp){
+  const drop=inp.nextElementSibling;
+  drop.style.display='none';
+  // validate match
+  const nm=inp.value.trim();
+  if(nm){
+    const matched=S.inventory.find(i=>i.name===nm);
+    inp.style.borderColor=matched?'var(--green)':'var(--orange)';
+    if(matched){
+      const row=inp.closest('.ing-row');
+      if(row)row.querySelector('.ru').value=matched.unit;
+    }
+  }else{inp.style.borderColor='';}
+}
+
+function filterIngDrop(inp){
+  const drop=inp.nextElementSibling;
+  renderIngDrop(inp,drop,inp.value);
+  drop.style.display='block';
+}
+
+function renderIngDrop(inp,drop,q){
+  const items=S.inventory.filter(i=>!q||i.name.includes(q));
+  if(!items.length){drop.innerHTML='<div style="padding:8px 12px;font-size:12px;color:var(--tx3)">목록에 없음 — 직접 입력 후 신규 등록됩니다</div>';return;}
+  drop.innerHTML=items.map(i=>`
+    <div style="padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:0.5px solid var(--bd);display:flex;align-items:center;justify-content:space-between"
+      onmousedown="pickIng(event,'${escQ(i.name)}','${i.unit}')"
+      ontouchstart="pickIng(event,'${escQ(i.name)}','${i.unit}')">
+      <span>${esc(i.name)}</span>
+      <span style="font-size:11px;color:var(--tx3)">${i.unit}</span>
+    </div>`).join('');
+}
+
+function hideIngDropSimple(inp){
+  const drop=inp.nextElementSibling;
+  if(drop)drop.style.display='none';
+  const nm=inp.value.trim();
+  if(nm){
+    const matched=S.inventory.find(i=>i.name===nm);
+    if(matched){
+      const row=inp.closest('.add-row');
+      if(row){const s=row.querySelector('.un');if(s)s.value=matched.unit;}
+    }
+  }
+}
+
+function pickIng(e,name,unit){
+  e.preventDefault();
+  const drop=e.currentTarget.parentElement;
+  const inp=drop.previousElementSibling;
+  inp.value=name;
+  inp.style.borderColor='var(--green)';
+  drop.style.display='none';
+  // recipe row
+  const recRow=inp.closest('.ing-row');
+  if(recRow){recRow.querySelector('.ru').value=unit;return;}
+  // incoming/prod row
+  const addRow=inp.closest('.add-row');
+  if(addRow){const s=addRow.querySelector('.un');if(s)s.value=unit;}
 }
 
 async function saveRecModal(){
